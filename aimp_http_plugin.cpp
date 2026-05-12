@@ -44,11 +44,6 @@ std::string WStr(const wchar_t* w) {
     return s;
 }
 
-std::string GenerateId(const std::string& prefix, int index) {
-    char buf[64];
-    snprintf(buf, sizeof(buf), "%s_%03d", prefix.c_str(), index);
-    return buf;
-}
 
 // ==========================================
 // Вспомогательные функции AIMP API
@@ -300,9 +295,7 @@ json GetPlaylistsResponse() {
             continue;
 
         json p;
-        p["index"]       = i;
-        p["id"]          = GetPlaylistId(pl);      // реальный GUID из AIMP
-        p["id_index"]    = GenerateId("pl", i);    // числовой id для маршрутизации
+        p["id"]          = i;                   // числовой индекс для маршрутизации (/api/playlists/0/tracks и т.д.)
         p["name"]        = GetPlaylistName(pl);
         p["track_count"] = pl->GetItemCount();
         p["duration"]    = GetPlaylistDuration(pl);
@@ -350,9 +343,7 @@ json GetPlaylistResponse(int playlistIdx) {
     IAIMPPlaylist* activePl  = nullptr; mgr->GetActivePlaylist(&activePl);
     IAIMPPlaylist* playingPl = nullptr; mgr->GetPlayingPlaylist(&playingPl);
 
-    r["index"]       = playlistIdx;
-    r["id"]          = GetPlaylistId(pl);
-    r["id_index"]    = GenerateId("pl", playlistIdx);
+    r["id"]          = playlistIdx;
     r["name"]        = GetPlaylistName(pl);
     r["track_count"] = pl->GetItemCount();
     r["duration"]    = GetPlaylistDuration(pl);
@@ -377,7 +368,7 @@ json GetPlaylistResponse(int playlistIdx) {
 
 json GetTracksResponse(int playlistIdx, int limit, int offset) {
     json r;
-    r["playlist_id"] = GenerateId("pl", playlistIdx);
+    r["playlist_id"] = playlistIdx;
     r["tracks"]      = json::array();
     r["offset"]      = offset;
     r["limit"]       = limit;
@@ -411,8 +402,7 @@ json GetTracksResponse(int playlistIdx, int limit, int offset) {
             continue;
 
         json t;
-        t["id"]                   = GenerateId("tr", i);
-        t["index"]                = i;
+        t["id"]                   = i;
         t["position_in_playlist"] = i + 1;
         GetFileInfo(item, t);
 
@@ -462,8 +452,7 @@ json GetTrackResponse(int playlistIdx, int trackIdx) {
         return r;
     }
 
-    r["id"]                   = GenerateId("tr", trackIdx);
-    r["index"]                = trackIdx;
+    r["id"]                   = trackIdx;
     r["position_in_playlist"] = trackIdx + 1;
     GetFileInfo(item, r);
 
@@ -803,8 +792,8 @@ void RunHttpServer() {
                             IAIMPPlaylist* pl = nullptr;
                             if (mgr->GetLoadedPlaylist(pp.playlistId, &pl) == S_OK && pl) {
                                 mgr->SetActivePlaylist(pl);
-                                rsp["id_index"] = GenerateId("pl", pp.playlistId);
-                                rsp["state"]    = "active";
+                                rsp["id"]    = pp.playlistId;
+                                rsp["state"] = "active";
                                 pl->Release();
                             } else { rsp["error"]["code"] = "PLAYLIST_NOT_FOUND"; code = 404; }
                             mgr->Release();
@@ -821,8 +810,8 @@ void RunHttpServer() {
                                     player->Play3(pl); // играть весь плейлист с начала
                                     player->Release();
                                 }
-                                rsp["id_index"] = GenerateId("pl", pp.playlistId);
-                                rsp["state"]    = "playing";
+                                rsp["id"]    = pp.playlistId;
+                                rsp["state"] = "playing";
                                 pl->Release();
                             } else { rsp["error"]["code"] = "PLAYLIST_NOT_FOUND"; code = 404; }
                             mgr->Release();
@@ -849,8 +838,8 @@ void RunHttpServer() {
                                         player->Play2(item);
                                         player->Release();
                                     }
-                                    rsp["id_index"] = GenerateId("tr", pp.trackId);
-                                    rsp["state"]    = "playing";
+                                    rsp["id"]    = pp.trackId;
+                                    rsp["state"] = "playing";
                                     item->Release();
                                 } else { rsp["error"]["code"] = "TRACK_NOT_FOUND"; code = 404; }
                                 pl->Release();
@@ -868,8 +857,8 @@ void RunHttpServer() {
                                     props->SetValueAsInt32(AIMP_PLAYLIST_PROPID_FOCUSINDEX, pp.trackId);
                                     props->Release();
                                 }
-                                rsp["id_index"] = GenerateId("tr", pp.trackId);
-                                rsp["state"]    = "focused";
+                                rsp["id"]    = pp.trackId;
+                                rsp["state"] = "focused";
                                 pl->Release();
                             } else { rsp["error"]["code"] = "PLAYLIST_NOT_FOUND"; code = 404; }
                             mgr->Release();
@@ -877,7 +866,7 @@ void RunHttpServer() {
                     }
                     else if (pp.action == "duration" && req.method == "GET") {
                         json ti = GetTrackResponse(pp.playlistId, pp.trackId);
-                        rsp["id_index"] = GenerateId("tr", pp.trackId);
+                        rsp["id"]       = pp.trackId;
                         rsp["duration"] = ti.value("duration", 0.0);
                     }
                     else {
