@@ -49,17 +49,18 @@ std::string WStr(const wchar_t* w) {
 // Вспомогательные функции AIMP API
 // ==========================================
 
-// IAIMPPlaylistProperties получается через QueryInterface на IAIMPPlaylist
-IAIMPPlaylistProperties* GetPlaylistProps(IAIMPPlaylist* pl) {
+// Согласно SDK: "Property IDs for IAIMPPropertyList from IAIMPPlaylist"
+// Свойства плейлиста читаются через IID_IAIMPPropertyList, а НЕ через IID_IAIMPPlaylistProperties
+IAIMPPropertyList* GetPlaylistProps(IAIMPPlaylist* pl) {
     if (!pl) return nullptr;
-    IAIMPPlaylistProperties* props = nullptr;
-    pl->QueryInterface(IID_IAIMPPlaylistProperties, (void**)&props);
+    IAIMPPropertyList* props = nullptr;
+    pl->QueryInterface(IID_IAIMPPropertyList, (void**)&props);
     return props;
 }
 
 std::string GetPlaylistName(IAIMPPlaylist* pl) {
     std::string result = "Unknown";
-    IAIMPPlaylistProperties* props = GetPlaylistProps(pl);
+    IAIMPPropertyList* props = GetPlaylistProps(pl);
     if (props) {
         IAIMPString* name = nullptr;
         if (props->GetValueAsObject(AIMP_PLAYLIST_PROPID_NAME, IID_IAIMPString, (void**)&name) == S_OK && name) {
@@ -73,7 +74,7 @@ std::string GetPlaylistName(IAIMPPlaylist* pl) {
 
 std::string GetPlaylistId(IAIMPPlaylist* pl) {
     std::string result = "";
-    IAIMPPlaylistProperties* props = GetPlaylistProps(pl);
+    IAIMPPropertyList* props = GetPlaylistProps(pl);
     if (props) {
         IAIMPString* idStr = nullptr;
         if (props->GetValueAsObject(AIMP_PLAYLIST_PROPID_ID, IID_IAIMPString, (void**)&idStr) == S_OK && idStr) {
@@ -88,7 +89,7 @@ std::string GetPlaylistId(IAIMPPlaylist* pl) {
 // AIMP_PLAYLIST_PROPID_PLAYINGINDEX = 52 — индекс воспроизводимого трека в плейлисте
 int GetPlayingIndex(IAIMPPlaylist* pl) {
     int index = -1;
-    IAIMPPlaylistProperties* props = GetPlaylistProps(pl);
+    IAIMPPropertyList* props = GetPlaylistProps(pl);
     if (props) {
         props->GetValueAsInt32(AIMP_PLAYLIST_PROPID_PLAYINGINDEX, &index);
         props->Release();
@@ -99,7 +100,7 @@ int GetPlayingIndex(IAIMPPlaylist* pl) {
 // AIMP_PLAYLIST_PROPID_FOCUSINDEX = 50
 int GetFocusedIndex(IAIMPPlaylist* pl) {
     int index = -1;
-    IAIMPPlaylistProperties* props = GetPlaylistProps(pl);
+    IAIMPPropertyList* props = GetPlaylistProps(pl);
     if (props) {
         props->GetValueAsInt32(AIMP_PLAYLIST_PROPID_FOCUSINDEX, &index);
         props->Release();
@@ -110,7 +111,7 @@ int GetFocusedIndex(IAIMPPlaylist* pl) {
 // AIMP_PLAYLIST_PROPID_DURATION = 54
 double GetPlaylistDuration(IAIMPPlaylist* pl) {
     double duration = 0;
-    IAIMPPlaylistProperties* props = GetPlaylistProps(pl);
+    IAIMPPropertyList* props = GetPlaylistProps(pl);
     if (props) {
         props->GetValueAsFloat(AIMP_PLAYLIST_PROPID_DURATION, &duration);
         props->Release();
@@ -295,7 +296,8 @@ json GetPlaylistsResponse() {
             continue;
 
         json p;
-        p["id"]          = i;                   // числовой индекс для маршрутизации (/api/playlists/0/tracks и т.д.)
+        p["id"]          = i;                    // числовой индекс для маршрутизации (/api/playlists/0/tracks и т.д.)
+        p["aimp_id"]     = GetPlaylistId(pl);    // реальный строковый ID из AIMP (AIMP_PLAYLIST_PROPID_ID)
         p["name"]        = GetPlaylistName(pl);
         p["track_count"] = pl->GetItemCount();
         p["duration"]    = GetPlaylistDuration(pl);
@@ -852,7 +854,7 @@ void RunHttpServer() {
                         if (g_core && g_core->QueryInterface(IID_IAIMPServicePlaylistManager, (void**)&mgr) == S_OK && mgr) {
                             IAIMPPlaylist* pl = nullptr;
                             if (mgr->GetLoadedPlaylist(pp.playlistId, &pl) == S_OK && pl) {
-                                IAIMPPlaylistProperties* props = GetPlaylistProps(pl);
+                                IAIMPPropertyList* props = GetPlaylistProps(pl);
                                 if (props) {
                                     props->SetValueAsInt32(AIMP_PLAYLIST_PROPID_FOCUSINDEX, pp.trackId);
                                     props->Release();
