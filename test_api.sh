@@ -244,6 +244,88 @@ echo "GET /api/player/status"
 curl -s "$BASE/api/player/status"
 echo ""
 
+# 8. Toggles (shuffle, repeat, auto-jump)
+echo ""
+echo "=========================================="
+echo "  8. TOGGLES (shuffle, repeat, auto-jump)"
+echo "=========================================="
+
+echo ""
+echo "GET /api/player/shuffle"
+curl -s "$BASE/api/player/shuffle"
+echo ""
+
+echo ""
+echo "POST /api/player/shuffle  (toggle)"
+curl -s -X POST "$BASE/api/player/shuffle"
+echo ""
+sleep $DELAY
+
+echo ""
+echo "GET /api/player/shuffle  (check)"
+curl -s "$BASE/api/player/shuffle"
+echo ""
+
+echo ""
+echo "POST /api/player/shuffle  (toggle back)"
+curl -s -X POST "$BASE/api/player/shuffle"
+echo ""
+sleep $DELAY
+
+echo ""
+echo "GET /api/player/repeat"
+curl -s "$BASE/api/player/repeat"
+echo ""
+
+echo ""
+echo "POST /api/player/repeat  (toggle)"
+curl -s -X POST "$BASE/api/player/repeat"
+echo ""
+sleep $DELAY
+
+echo ""
+echo "GET /api/player/repeat  (check)"
+curl -s "$BASE/api/player/repeat"
+echo ""
+
+echo ""
+echo "POST /api/player/repeat  (toggle back)"
+curl -s -X POST "$BASE/api/player/repeat"
+echo ""
+sleep $DELAY
+
+echo ""
+echo "GET /api/player/auto-jump"
+curl -s "$BASE/api/player/auto-jump"
+echo ""
+
+echo ""
+echo "POST /api/player/auto-jump  (toggle)"
+curl -s -X POST "$BASE/api/player/auto-jump"
+echo ""
+sleep $DELAY
+
+echo ""
+echo "GET /api/player/auto-jump  (check)"
+curl -s "$BASE/api/player/auto-jump"
+echo ""
+
+echo ""
+echo "POST /api/player/auto-jump  (toggle back)"
+curl -s -X POST "$BASE/api/player/auto-jump"
+echo ""
+sleep $DELAY
+
+# 9. Полный статус (проверяем что всё видно)
+echo ""
+echo "=========================================="
+echo "  9. FULL STATUS (final check)"
+echo "=========================================="
+echo ""
+echo "GET /api/player/status"
+curl -s "$BASE/api/player/status"
+echo ""
+
 echo ""
 echo "=========================================="
 echo "  TEST COMPLETE"

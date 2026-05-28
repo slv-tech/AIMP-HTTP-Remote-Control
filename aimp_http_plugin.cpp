@@ -24,6 +24,7 @@ using json = nlohmann::json;
 #include "sdk/apiObjects.h"
 #include "sdk/apiFileManager.h"
 #include "sdk/apiThreading.h"
+#include "sdk/apiMessages.h"
 
 // ==========================================
 // Глобальные переменные
@@ -192,6 +193,41 @@ void GetFileInfo(IAIMPPlaylistItem* item, json& out) {
 // ==========================================
 
 // Вспомогательная: заполнить json информацией о плейлисте по индексу (вызывать из главного потока)
+// ==========================================
+// Message API helpers (shuffle, repeat, auto-jump)
+// IAIMPServiceMessageDispatcher::Send() — thread-safe, можно из HTTP-потока
+// ==========================================
+
+// Получить bool-свойство через Message API
+bool MsgGetBool(int propertyId) {
+    if (!g_core) return false;
+    IAIMPServiceMessageDispatcher* msgd = nullptr;
+    if (g_core->QueryInterface(IID_IAIMPServiceMessageDispatcher, (void**)&msgd) != S_OK || !msgd)
+        return false;
+    BOOL val = FALSE;
+    msgd->Send(propertyId, AIMP_MSG_PROPVALUE_GET, &val);
+    msgd->Release();
+    return val != FALSE;
+}
+
+// Установить bool-свойство через Message API. Возвращает новое значение.
+bool MsgSetBool(int propertyId, bool value) {
+    if (!g_core) return false;
+    IAIMPServiceMessageDispatcher* msgd = nullptr;
+    if (g_core->QueryInterface(IID_IAIMPServiceMessageDispatcher, (void**)&msgd) != S_OK || !msgd)
+        return false;
+    BOOL val = value ? TRUE : FALSE;
+    msgd->Send(propertyId, AIMP_MSG_PROPVALUE_SET, &val);
+    msgd->Release();
+    return value;
+}
+
+// Toggle bool-свойство. Возвращает новое значение.
+bool MsgToggleBool(int propertyId) {
+    bool current = MsgGetBool(propertyId);
+    return MsgSetBool(propertyId, !current);
+}
+
 // Возвращает false если плейлист не найден
 bool FillPlaylistJson(IAIMPServicePlaylistManager* mgr, int idx, json& out) {
     if (idx < 0) return false;
@@ -238,11 +274,37 @@ json GetPlayerStatus() {
         int st = player->GetState();
         r["state"] = (st == AIMP_PLAYER_STATE_PLAYING) ? "playing"
                    : (st == AIMP_PLAYER_STATE_PAUSED)  ? "paused" : "stopped";
-        double pos = 0; player->GetPosition(&pos); r["position"] = pos;
-        double dur = 0; player->GetDuration(&dur);  r["duration"] = dur;
+        double pos = 0; player->GetPosition(&pos); r["position"]  = pos;
+        double dur = 0; player->GetDuration(&dur);  r["duration"]  = dur;
+        r["remaining"] = (dur > pos) ? (dur - pos) : 0.0;
         float  vol = 0; player->GetVolume(&vol);    r["volume"]   = (int)(vol * 100.0f);
         BOOL muted = FALSE; player->GetMute(&muted); r["muted"] = (muted != FALSE);
         player->Release();
+    }
+
+    // --- Часть 1.5: Свойства через Message API (thread-safe) ---
+    r["shuffle"]         = MsgGetBool(AIMP_MSG_PROPERTY_SHUFFLE);
+    r["repeat"]          = MsgGetBool(AIMP_MSG_PROPERTY_REPEAT);
+    r["auto_jump"]       = MsgGetBool(AIMP_MSG_PROPERTY_AUTOJUMP_TO_NEXT_TRACK);
+
+    // --- Часть 1.6: Next track через IAIMPServicePlaybackQueue (thread-safe) ---
+    r["next_track"] = nullptr;
+    IAIMPServicePlaybackQueue* queue = nullptr;
+    if (g_core->QueryInterface(IID_IAIMPServicePlaybackQueue, (void**)&queue) == S_OK && queue) {
+        IAIMPPlaybackQueueItem* nextItem = nullptr;
+        if (queue->GetNextTrack(&nextItem) == S_OK && nextItem) {
+            // Достаём IAIMPPlaylistItem из queue item
+            IAIMPPlaylistItem* plItem = nullptr;
+            if (nextItem->GetValueAsObject(AIMP_PLAYBACKQUEUEITEM_PROPID_PLAYLISTITEM,
+                    IID_IAIMPPlaylistItem, (void**)&plItem) == S_OK && plItem) {
+                json nt;
+                GetFileInfo(plItem, nt);
+                r["next_track"] = nt;
+                plItem->Release();
+            }
+            nextItem->Release();
+        }
+        queue->Release();
     }
 
     // --- Часть 2: Данные плейлистов/треков — требуют главного потока ---
@@ -827,6 +889,34 @@ void RunHttpServer() {
                     if (g_core && g_core->QueryInterface(IID_IAIMPServicePlayer,(void**)&p)==S_OK && p) { p->SetPosition(pos); rsp["position"]=pos; p->Release(); }
                 } else { rsp["error"]["code"]="INVALID_POSITION"; code=400; }
             }
+            // ---- Player toggles ----
+            // POST /api/player/shuffle — toggle shuffle
+            else if (req.path == "/api/player/shuffle" && req.method == "POST") {
+                bool val = MsgToggleBool(AIMP_MSG_PROPERTY_SHUFFLE);
+                rsp["shuffle"] = val;
+            }
+            // GET /api/player/shuffle — get shuffle state
+            else if (req.path == "/api/player/shuffle" && req.method == "GET") {
+                rsp["shuffle"] = MsgGetBool(AIMP_MSG_PROPERTY_SHUFFLE);
+            }
+            // POST /api/player/repeat — toggle repeat
+            else if (req.path == "/api/player/repeat" && req.method == "POST") {
+                bool val = MsgToggleBool(AIMP_MSG_PROPERTY_REPEAT);
+                rsp["repeat"] = val;
+            }
+            // GET /api/player/repeat — get repeat state
+            else if (req.path == "/api/player/repeat" && req.method == "GET") {
+                rsp["repeat"] = MsgGetBool(AIMP_MSG_PROPERTY_REPEAT);
+            }
+            // POST /api/player/auto-jump — toggle "automatically jump to next track"
+            else if (req.path == "/api/player/auto-jump" && req.method == "POST") {
+                bool val = MsgToggleBool(AIMP_MSG_PROPERTY_AUTOJUMP_TO_NEXT_TRACK);
+                rsp["auto_jump"] = val;
+            }
+            // GET /api/player/auto-jump — get auto-jump state
+            else if (req.path == "/api/player/auto-jump" && req.method == "GET") {
+                rsp["auto_jump"] = MsgGetBool(AIMP_MSG_PROPERTY_AUTOJUMP_TO_NEXT_TRACK);
+            }
             // ---- Focus API ----
             // POST /api/focus/playlist/next  — следующий плейлист в фокусе
             else if (req.path == "/api/focus/playlist/next" && req.method == "POST") {
@@ -905,7 +995,7 @@ void RunHttpServer() {
             else if (req.path == "/api" || req.path == "/api/") {
                 rsp["name"] = "AIMP HTTP Control API v2.0";
                 rsp["endpoints"] = json::array({
-                    "GET  /api/player/status  — статус плеера + playing/focus плейлист и трек",
+                    "GET  /api/player/status  — полный статус + shuffle/repeat/auto_jump/next_track",
                     "POST /api/player/play",
                     "POST /api/player/pause",
                     "POST /api/player/stop",
@@ -915,6 +1005,13 @@ void RunHttpServer() {
                     "PUT  /api/player/volume",
                     "POST /api/player/mute",
                     "PUT  /api/player/position",
+                    "--- Toggles ---",
+                    "GET  /api/player/shuffle    — состояние shuffle",
+                    "POST /api/player/shuffle    — toggle shuffle",
+                    "GET  /api/player/repeat     — состояние repeat",
+                    "POST /api/player/repeat     — toggle repeat",
+                    "GET  /api/player/auto-jump  — auto jump to next track",
+                    "POST /api/player/auto-jump  — toggle auto jump",
                     "--- Focus (Bitfocus navigation) ---",
                     "GET  /api/focus              — текущий плейлист и трек в фокусе",
                     "POST /api/focus/playlist/next — следующий плейлист в фокусе",
