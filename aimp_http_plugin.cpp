@@ -1377,9 +1377,9 @@ std::wstring GetSettingsPath() {
 
 void LoadSettings() {
     std::wstring ini = GetSettingsPath();
-    g_port     = GetPrivateProfileIntW(L"Server", L"Port", 3553, ini.c_str());
+    g_port     = GetPrivateProfileIntW(L"Server", L"Port", 19122, ini.c_str());
     g_bindMode = GetPrivateProfileIntW(L"Server", L"BindMode", 2, ini.c_str());
-    if (g_port < 1 || g_port > 65535) g_port = 3553;
+    if (g_port < 1 || g_port > 65535) g_port = 19122;
     if (g_bindMode < 0 || g_bindMode > 2) g_bindMode = 2;
 }
 
@@ -1504,7 +1504,7 @@ HWND CreateSettingsDialog(HWND parent) {
     // Label "Port:"
     addItem(SS_LEFT, 14, 16, 30, 10, (WORD)-1, L"STATIC", L"Port:");
     // Edit (port)
-    addItem(ES_NUMBER | WS_BORDER | WS_TABSTOP, 50, 14, 50, 14, IDC_PORT_EDIT, L"EDIT", L"3553");
+    addItem(ES_NUMBER | WS_BORDER | WS_TABSTOP, 50, 14, 50, 14, IDC_PORT_EDIT, L"EDIT", L"19122");
     // Label "Bind:"
     addItem(SS_LEFT, 14, 38, 30, 10, (WORD)-1, L"STATIC", L"Bind:");
     // ComboBox (bind mode)
