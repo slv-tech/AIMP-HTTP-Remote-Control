@@ -1588,7 +1588,7 @@ public:
 
     TChar* WINAPI InfoGet(int Index) override {
         static wchar_t n[] = L"AIMP HTTP Control API v2";
-        static wchar_t a[] = L"SLV Dev Team";
+        static wchar_t a[] = L"SLV Tech";
         static wchar_t d[] = L"Full REST API for AIMP";
         switch (Index) {
             case AIMP_PLUGIN_INFO_NAME:              return n;
