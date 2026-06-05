@@ -1,0 +1,19 @@
+[AimpHttpControl]
+OptionsPageName=HTTP Remote Control
+
+[AimpHttpControl.Options]
+GrpServer=Сервер
+LblPort=Порт:
+LblInterface=Сетевой интерфейс:
+GrpAccess=Политика доступа
+ChkAllowOnly=Разрешить подключение только с:
+LblAllowList=Список IP / CIDR:
+LblStatus=Сервер: %s:%d
+
+[AimpHttpControl.Options.Interfaces]
+Localhost=Только локальный (127.0.0.1)
+AllInterfaces=Все интерфейсы (0.0.0.0)
+
+[AimpHttpControl.Description]
+Text=Данный плагин поднимает сервер для удаленного управления плеером с помощью таких программ, как: Bitfocus Companion и др.
+Note=Внимание! Плагин только поднимает сервер. Для настройки удаленного управления Вам необходимо настроить соединение в программе для управления.

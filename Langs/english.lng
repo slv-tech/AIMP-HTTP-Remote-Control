@@ -1,0 +1,19 @@
+[AimpHttpControl]
+OptionsPageName=HTTP Remote Control
+
+[AimpHttpControl.Options]
+GrpServer=Server
+LblPort=Port:
+LblInterface=Listen interface:
+GrpAccess=Access policy
+ChkAllowOnly=Allow access only from:
+LblAllowList=IP / CIDR list:
+LblStatus=Server: %s:%d
+
+[AimpHttpControl.Options.Interfaces]
+Localhost=Localhost (127.0.0.1)
+AllInterfaces=All interfaces (0.0.0.0)
+
+[AimpHttpControl.Description]
+Text=This plugin starts a server for remote player control using programs such as: Bitfocus Companion, etc.
+Note=Please note: the plugin only starts the server. To configure remote control, you need to configure the connection in the control program.

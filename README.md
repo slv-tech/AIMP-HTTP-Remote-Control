@@ -8,7 +8,31 @@
 
 Плагин для удалённого управления AIMP через HTTP API. Работает с версией плеера 5.40.2716 и старше. Доступен для Windows (`.dll`). Создан для управления плеером в Bitfocus Companion через соответствующий модуль. Работает с Companion 4.3.2 и старше. Модуль для Companion доступен в каталоге модулей.
 
+### Установка
+
+#### Через пакет `.aimppack` (рекомендуется)
+
+Скачайте `AimpHttpControl.aimppack` из releases и дважды кликните по файлу — AIMP установит плагин автоматически, выбрав нужную разрядность (x64 или x32).
+
+#### Вручную
+
+Скопируйте нужный `.dll` файл напрямую в папку плагинов AIMP и переименуйте в `AimpHttpControl.dll`:
+
+```
+%APPDATA%\AIMP\Plugins\AimpHttpControl.dll
+```
+
+Используйте `AimpHttpControl64.dll` для 64-бит AIMP, `AimpHttpControl32.dll` для 32-бит.
+
 ### Сборка
+
+#### Быстрая сборка (x64 + x32 + пакет)
+
+```bash
+bash build_package.sh
+```
+
+Создаёт `AimpHttpControl64.dll`, `AimpHttpControl32.dll` и `AimpHttpControl.aimppack`.
 
 #### Windows (x64)
 
@@ -17,8 +41,10 @@ x86_64-w64-mingw32-g++ \
     -std=c++17 -O2 -Wall \
     -Wno-missing-braces -Wno-delete-non-virtual-dtor \
     -D_WIN32_WINNT=0x0A00 \
-    -I. -isystem sdk -isystem third_party \
-    aimp_http_plugin.cpp \
+    -Isrc -isystem sdk -isystem third_party \
+    src/globals.cpp src/utils.cpp src/network.cpp src/focus_sync.cpp \
+    src/settings.cpp src/player_api.cpp src/http_server.cpp \
+    src/options_frame.cpp src/plugin.cpp \
     -shared -o AimpHttpControl64.dll \
     -lws2_32 -liphlpapi -luuid -lkernel32 -luser32 -lgdi32 \
     -static-libgcc -static-libstdc++ \
@@ -32,12 +58,15 @@ i686-w64-mingw32-g++ \
     -std=c++17 -O2 -Wall \
     -Wno-missing-braces -Wno-delete-non-virtual-dtor \
     -D_WIN32_WINNT=0x0A00 \
-    -I. -isystem sdk -isystem third_party \
-    aimp_http_plugin.cpp \
+    -Isrc -isystem sdk -isystem third_party \
+    src/globals.cpp src/utils.cpp src/network.cpp src/focus_sync.cpp \
+    src/settings.cpp src/player_api.cpp src/http_server.cpp \
+    src/options_frame.cpp src/plugin.cpp \
     -shared -o AimpHttpControl32.dll \
     -lws2_32 -liphlpapi -luuid -lkernel32 -luser32 -lgdi32 \
     -static-libgcc -static-libstdc++ \
-    -Wl,-Bstatic -lstdc++ -lpthread -Wl,-Bdynamic
+    -Wl,-Bstatic -lstdc++ -lpthread -Wl,-Bdynamic \
+    src/plugin.def
 ```
 
 ### Настройки
@@ -62,29 +91,51 @@ i686-w64-mingw32-g++ \
 
 ### API эндпоинты
 
+#### Плеер
+
 | Метод | Путь | Описание |
 |-------|------|----------|
-| GET | `/api/ping` | Проверка работы |
-| GET | `/api/status` | Полный статус плеера |
-| GET | `/api/player` | Состояние плеера |
-| GET | `/api/player/state` | Только состояние (playing/paused/stopped) |
-| GET | `/api/player/track` | Текущий трек |
-| GET | `/api/player/track/focused` | Трек на курсоре |
-| GET | `/api/player/track/selected` | Выделенные треки |
-| GET | `/api/player/position` | Позиция воспроизведения |
-| POST | `/api/player/position?position=30` | Установить позицию |
-| GET | `/api/player/volume` | Громкость |
-| POST | `/api/player/volume?volume=0.5` | Установить громкость |
-| POST | `/api/player/playpause` | Play/Pause |
-| POST | `/api/player/play?track=5` | Play / Play трек |
+| GET | `/api/player/status` | Полный статус плеера (состояние, трек, громкость, позиция, плейлист, фокус) |
+| POST | `/api/player/play` | Возобновить воспроизведение |
 | POST | `/api/player/pause` | Пауза |
 | POST | `/api/player/stop` | Стоп |
 | POST | `/api/player/next` | Следующий трек |
 | POST | `/api/player/prev` | Предыдущий трек |
-| GET | `/api/playlists` | Список плейлистов |
-| GET | `/api/playlist/{id}` | Инфо о плейлисте |
-| GET | `/api/playlist/{id}/tracks` | Треки в плейлисте |
-| POST | `/api/playlist/{id}/play?track=5` | Запустить трек |
+| GET | `/api/player/volume` | Получить громкость |
+| PUT | `/api/player/volume` | Установить громкость (тело: `{"volume": 75}` или `?volume=75`) |
+| POST | `/api/player/mute` | Переключить mute |
+| PUT | `/api/player/position` | Установить позицию в секундах (тело: `{"position": 30}`) |
+| GET | `/api/player/shuffle` | Получить состояние shuffle |
+| POST | `/api/player/shuffle` | Переключить shuffle |
+| GET | `/api/player/repeat` | Получить состояние repeat |
+| POST | `/api/player/repeat` | Переключить repeat |
+| GET | `/api/player/auto-jump` | Получить состояние auto-jump |
+| POST | `/api/player/auto-jump` | Переключить auto-jump |
+
+#### Фокус (навигация по плейлистам без воспроизведения)
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/api/focus` | Текущий фокус (плейлист + трек) |
+| POST | `/api/focus/playlist/next` | Фокус на следующий плейлист |
+| POST | `/api/focus/playlist/prev` | Фокус на предыдущий плейлист |
+| POST | `/api/focus/track/next` | Фокус на следующий трек |
+| POST | `/api/focus/track/prev` | Фокус на предыдущий трек |
+| POST | `/api/focus/play` | Воспроизвести трек в фокусе |
+
+#### Плейлисты
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/api/playlists` | Список всех плейлистов |
+| GET | `/api/playlists/{id}` | Информация о плейлисте |
+| GET | `/api/playlists/{id}/tracks` | Треки плейлиста (`?limit=50&offset=0`) |
+| GET | `/api/playlists/{id}/tracks/{tid}` | Информация о треке |
+| POST | `/api/playlists/{id}/play` | Воспроизвести плейлист с первого трека |
+| POST | `/api/playlists/{id}/resume` | Воспроизвести плейлист с последней позиции (трек в фокусе) |
+| POST | `/api/playlists/{id}/select` | Сделать плейлист активным |
+| POST | `/api/playlists/{id}/tracks/{tid}/play` | Воспроизвести трек |
+| POST | `/api/playlists/{id}/tracks/{tid}/select` | Установить фокус на трек |
 
 ---
 
@@ -92,7 +143,31 @@ i686-w64-mingw32-g++ \
 
 A plugin for remote control of AIMP via HTTP API. Compatible with AIMP version 5.40.2716 and above. Available for Windows (`.dll`). Designed for controlling the player in Bitfocus Companion via the corresponding module. Works with Companion 4.3.2 and above. The Companion module is available in the module catalog.
 
+### Installation
+
+#### Via `.aimppack` package (recommended)
+
+Download `AimpHttpControl.aimppack` from releases and double-click it — AIMP will install the plugin automatically, selecting the correct architecture (x64 or x32).
+
+#### Manual
+
+Copy the appropriate `.dll` directly to the AIMP plugins folder and rename it to `AimpHttpControl.dll`:
+
+```
+%APPDATA%\AIMP\Plugins\AimpHttpControl.dll
+```
+
+Use `AimpHttpControl64.dll` for 64-bit AIMP, `AimpHttpControl32.dll` for 32-bit.
+
 ### Build
+
+#### Quick build (x64 + x32 + package)
+
+```bash
+bash build_package.sh
+```
+
+Produces `AimpHttpControl64.dll`, `AimpHttpControl32.dll` and `AimpHttpControl.aimppack`.
 
 #### Windows (x64)
 
@@ -101,8 +176,10 @@ x86_64-w64-mingw32-g++ \
     -std=c++17 -O2 -Wall \
     -Wno-missing-braces -Wno-delete-non-virtual-dtor \
     -D_WIN32_WINNT=0x0A00 \
-    -I. -isystem sdk -isystem third_party \
-    aimp_http_plugin.cpp \
+    -Isrc -isystem sdk -isystem third_party \
+    src/globals.cpp src/utils.cpp src/network.cpp src/focus_sync.cpp \
+    src/settings.cpp src/player_api.cpp src/http_server.cpp \
+    src/options_frame.cpp src/plugin.cpp \
     -shared -o AimpHttpControl64.dll \
     -lws2_32 -liphlpapi -luuid -lkernel32 -luser32 -lgdi32 \
     -static-libgcc -static-libstdc++ \
@@ -116,12 +193,15 @@ i686-w64-mingw32-g++ \
     -std=c++17 -O2 -Wall \
     -Wno-missing-braces -Wno-delete-non-virtual-dtor \
     -D_WIN32_WINNT=0x0A00 \
-    -I. -isystem sdk -isystem third_party \
-    aimp_http_plugin.cpp \
+    -Isrc -isystem sdk -isystem third_party \
+    src/globals.cpp src/utils.cpp src/network.cpp src/focus_sync.cpp \
+    src/settings.cpp src/player_api.cpp src/http_server.cpp \
+    src/options_frame.cpp src/plugin.cpp \
     -shared -o AimpHttpControl32.dll \
     -lws2_32 -liphlpapi -luuid -lkernel32 -luser32 -lgdi32 \
     -static-libgcc -static-libstdc++ \
-    -Wl,-Bstatic -lstdc++ -lpthread -Wl,-Bdynamic
+    -Wl,-Bstatic -lstdc++ -lpthread -Wl,-Bdynamic \
+    src/plugin.def
 ```
 
 ### Settings
@@ -146,26 +226,48 @@ When the checkbox is unchecked, connections are accepted from any address (white
 
 ### API Endpoints
 
+#### Player
+
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/ping` | Health check |
-| GET | `/api/status` | Full player status |
-| GET | `/api/player` | Player state |
-| GET | `/api/player/state` | State only (playing/paused/stopped) |
-| GET | `/api/player/track` | Current track |
-| GET | `/api/player/track/focused` | Track under cursor |
-| GET | `/api/player/track/selected` | Selected tracks |
-| GET | `/api/player/position` | Playback position |
-| POST | `/api/player/position?position=30` | Set position |
-| GET | `/api/player/volume` | Volume |
-| POST | `/api/player/volume?volume=0.5` | Set volume |
-| POST | `/api/player/playpause` | Play/Pause |
-| POST | `/api/player/play?track=5` | Play / Play track |
+| GET | `/api/player/status` | Full player status (state, track, volume, position, playlist, focus) |
+| POST | `/api/player/play` | Resume playback |
 | POST | `/api/player/pause` | Pause |
 | POST | `/api/player/stop` | Stop |
 | POST | `/api/player/next` | Next track |
 | POST | `/api/player/prev` | Previous track |
-| GET | `/api/playlists` | List of playlists |
-| GET | `/api/playlist/{id}` | Playlist info |
-| GET | `/api/playlist/{id}/tracks` | Tracks in playlist |
-| POST | `/api/playlist/{id}/play?track=5` | Play track |
+| GET | `/api/player/volume` | Get volume |
+| PUT | `/api/player/volume` | Set volume (body: `{"volume": 75}` or `?volume=75`) |
+| POST | `/api/player/mute` | Toggle mute |
+| PUT | `/api/player/position` | Set position in seconds (body: `{"position": 30}`) |
+| GET | `/api/player/shuffle` | Get shuffle state |
+| POST | `/api/player/shuffle` | Toggle shuffle |
+| GET | `/api/player/repeat` | Get repeat state |
+| POST | `/api/player/repeat` | Toggle repeat |
+| GET | `/api/player/auto-jump` | Get auto-jump state |
+| POST | `/api/player/auto-jump` | Toggle auto-jump |
+
+#### Focus (playlist navigation without playback)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/focus` | Current focus (playlist + track) |
+| POST | `/api/focus/playlist/next` | Focus next playlist |
+| POST | `/api/focus/playlist/prev` | Focus previous playlist |
+| POST | `/api/focus/track/next` | Focus next track |
+| POST | `/api/focus/track/prev` | Focus previous track |
+| POST | `/api/focus/play` | Play focused track |
+
+#### Playlists
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/playlists` | List all playlists |
+| GET | `/api/playlists/{id}` | Playlist info |
+| GET | `/api/playlists/{id}/tracks` | Playlist tracks (`?limit=50&offset=0`) |
+| GET | `/api/playlists/{id}/tracks/{tid}` | Track info |
+| POST | `/api/playlists/{id}/play` | Play playlist from the first track |
+| POST | `/api/playlists/{id}/resume` | Play playlist from the last position (focused track) |
+| POST | `/api/playlists/{id}/select` | Set playlist as active |
+| POST | `/api/playlists/{id}/tracks/{tid}/play` | Play track |
+| POST | `/api/playlists/{id}/tracks/{tid}/select` | Focus track |
